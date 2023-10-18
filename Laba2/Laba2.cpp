@@ -188,7 +188,59 @@ int main()
 
         pclsObj->Release();
     }
-   
+    
+    IWbemClassObject* pClass = NULL;
+    hres = psvc->GetObject(_bstr_t ("Win32_Keyboard"), 0, NULL, &pClass, NULL);
+
+    if (FAILED(hres))
+    {
+        cout << "GetObject failed" << " Error code = 0x" << hex << hres << endl;
+        cout << _com_error(hres).ErrorMessage() << endl;
+        psvc->Release();
+        ploc->Release();
+        CoUninitialize();
+        cout << "press enter to exit" << endl;
+        cin.get();
+        return 1;               // Program has failed.
+    }
+
+    SAFEARRAY* psaNames = NULL;
+    hres = pClass->GetNames(
+        NULL,
+        WBEM_FLAG_ALWAYS | WBEM_FLAG_NONSYSTEM_ONLY,
+        NULL,
+        &psaNames);
+    if (FAILED(hres))
+    {
+        cout << "GetNames failed" << " Error code = 0x" << hex << hres << endl;
+        cout << _com_error(hres).ErrorMessage() << endl;
+        psvc->Release();
+        ploc->Release();
+        CoUninitialize();
+        cout << "press enter to exit" << endl;
+        cin.get();
+        return 1;               // Program has failed.
+    }
+
+    long lLower, lUpper;
+    BSTR PropName = NULL;
+    SafeArrayGetLBound(psaNames, 1, &lLower);
+    SafeArrayGetUBound(psaNames, 1, &lUpper);
+    cout << "\nWin32_Keyboard Properties: " << endl;
+    for (long i = lLower; i <= lUpper; i++)
+    {
+        // Get this property.
+        hres = SafeArrayGetElement(
+            psaNames,
+            &i,
+            &PropName);
+
+        wcout << PropName << endl;
+        SysFreeString(PropName);
+    }
+
+    SafeArrayDestroy(psaNames);
+    
 
     psvc->Release();
     ploc->Release();
