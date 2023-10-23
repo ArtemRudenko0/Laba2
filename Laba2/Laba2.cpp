@@ -456,7 +456,7 @@ int main()
          &pEnumerator
      );
      if (SUCCEEDED(hres)) {
-         IWbemClassObject* pclsObj = NULL;
+         
          ULONG uReturn = 0;
          HRESULT hr = pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn);
          VARIANT vtProcessID;
