@@ -4,11 +4,12 @@
 #include <comdef.h>
 #include <Wbemidl.h>
 #include <string>
-
+#include <oleauto.h>
+#include <Windows.h>
 #pragma comment(lib, "wbemuuid.lib")
 
 using namespace std;
-
+SYSTEMTIME WMIDateStringToDate(BSTR WMIdateString);
 int main()
 {
 
@@ -22,6 +23,7 @@ int main()
     IEnumWbemClassObject* pEnumerator = NULL;
 
     IWbemClassObject* pclsObj = NULL;
+
     ULONG uReturn = 0;
 
     // Крок 1:
@@ -141,7 +143,7 @@ int main()
     }
     else cout << "\nGot keyboard info" << endl;
 
-    
+
 
 
 
@@ -172,25 +174,26 @@ int main()
         hr = pclsObj->Get(SysAllocString(L"Name"), 0, &vtName, 0, 0);
         hr = pclsObj->Get(SysAllocString(L"NumberOfFunctionKeys"), 0, &vtNumberOfFunctionKeys, 0, 0);
 
-        if (SUCCEEDED(hr) && vtDescription.vt == VT_BSTR 
-            && vtName.vt == VT_BSTR 
-            && vtNumberOfFunctionKeys.vt == VT_I4) 
+        if (SUCCEEDED(hr) && vtDescription.vt == VT_BSTR
+            && vtName.vt == VT_BSTR
+            && vtNumberOfFunctionKeys.vt == VT_I4)
         {
             wcout << L"Keyboard Description: " << bstr_t(vtDescription.bstrVal) << endl;
-            wcout << L"Keyboard Name: " <<  bstr_t(vtName.bstrVal) << endl;
+            wcout << L"Keyboard Name: " << bstr_t(vtName.bstrVal) << endl;
             wcout << L"Keyboard NumberOfFunctionKeys: " << vtNumberOfFunctionKeys.intVal << endl;
         }
         else cout << "Failed to retrieve Keyboard info" << endl;
-  
+
         VariantClear(&vtDescription);
         VariantClear(&vtName);
         VariantClear(&vtNumberOfFunctionKeys);
 
         pclsObj->Release();
     }
-    
-    IWbemClassObject* pClass = NULL;
-    hres = psvc->GetObject(_bstr_t ("Win32_Keyboard"), 0, NULL, &pClass, NULL);
+
+    //IWbemClassObject* pClass = NULL;
+
+    hres = psvc->GetObject(_bstr_t("Win32_Keyboard"), 0, NULL, &pclsObj, NULL);
 
     if (FAILED(hres))
     {
@@ -205,7 +208,7 @@ int main()
     }
 
     SAFEARRAY* psaNames = NULL;
-    hres = pClass->GetNames(
+    hres = pclsObj->GetNames(
         NULL,
         WBEM_FLAG_ALWAYS | WBEM_FLAG_NONSYSTEM_ONLY,
         NULL,
@@ -221,7 +224,6 @@ int main()
         cin.get();
         return 1;               // Program has failed.
     }
-
     long lLower, lUpper;
     BSTR PropName = NULL;
     SafeArrayGetLBound(psaNames, 1, &lLower);
@@ -240,8 +242,158 @@ int main()
     }
 
     SafeArrayDestroy(psaNames);
-    
 
+    STARTUPINFO si = { sizeof(STARTUPINFO) };
+    PROCESS_INFORMATION pi;
+
+    hres = psvc->ExecQuery(
+        _bstr_t("WQL"),
+        _bstr_t("SELECT * FROM Win32_Process WHERE Name = 'MSACCESS.EXE'"),
+        WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+        NULL,
+        &pEnumerator
+    );
+    int processID = 0;
+    if (SUCCEEDED(hres)) {
+
+        si.dwFlags = STARTF_USESHOWWINDOW;
+        si.wShowWindow = SW_SHOWMAXIMIZED;
+        LPCTSTR appPath = L"C:\\Program Files\\Microsoft Office\\root\\Office16\\MSACCESS.EXE";  // Ваш шлях до MS Access
+        // Параметри для виклику MS Access
+        WCHAR cmdLine[] = L"C:\\Users\\АРТЕМ\\Desktop\\Database1.accdb"; // Шлях до вашої бази даних
+        LPCTSTR cmdDir = NULL; // Робочий каталог (можна вказати NULL для поточного каталогу)
+        CreateProcess(appPath, cmdLine, NULL, NULL, FALSE, HIGH_PRIORITY_CLASS, NULL, cmdDir, &si, &pi);
+        Sleep(4000);
+        cout << endl;
+        while (pEnumerator) {
+            HRESULT hr = pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn);
+
+            if (uReturn == 0) {
+                break;
+            }
+
+            VARIANT vtProp;
+            hres = pclsObj->Get(L"ExecutablePath", 0, &vtProp, 0, 0);
+            wprintf(L"ExecutablePath: %s\n", vtProp.bstrVal);
+
+            hres = pclsObj->Get(L"CreationDate", 0, &vtProp, 0, 0);
+            SYSTEMTIME st = WMIDateStringToDate(vtProp.bstrVal);
+
+            wprintf(L"CreationDate: %04d-%02d-%02d %02d:%02d:%02d\n",
+                st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+            // Можете конвертувати цю дату за допомогою WMIDateStringToDate()
+
+
+            hres = pclsObj->Get(L"Priority", 0, &vtProp, 0, 0);
+            wprintf(L"Priority: %u\n", vtProp.uintVal);
+
+            hres = pclsObj->Get(L"ProcessID", 0, &vtProp, 0, 0);
+            processID = vtProp.uintVal;
+            wprintf(L"ProcessID: %u\n", vtProp.uintVal);
+
+            hres = pclsObj->Get(L"ThreadCount", 0, &vtProp, 0, 0);
+            wprintf(L"ThreadCount: %u\n", vtProp.uintVal);
+
+            // Отримуємо інформацію про процес MS Access
+        }
+    }
+    hres = psvc->ExecQuery(
+        _bstr_t("WQL"),
+        _bstr_t("SELECT * FROM Win32_Thread WHERE ProcessHandle = " + _bstr_t(std::to_wstring(processID).c_str())),
+        WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+        NULL,
+        &pEnumerator
+    );
+    if (SUCCEEDED(hres)) {
+        IWbemClassObject* pclsObj = NULL;
+        ULONG uReturn = 0;
+        int count = 0;
+        while (pEnumerator)
+        {
+            HRESULT hr = pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn);
+
+            if (0 == uReturn)
+            {
+                break;
+            }
+
+            VARIANT vtProp;
+            cout << "\n" << count + 1 << " Thread: " << endl;
+            // Извлеките свойства потока, включая требуемую информацию
+            hr = pclsObj->Get(L"ProcessHandle", 0, &vtProp, 0, 0);
+            wprintf(L"ProcssHandle: %s\n", vtProp.bstrVal);
+            VariantClear(&vtProp);
+
+            hr = pclsObj->Get(L"Priority", 0, &vtProp, 0, 0);
+            wprintf(L"Priority: %d\n", V_I4(&vtProp));
+            VariantClear(&vtProp);
+
+            hr = pclsObj->Get(L"PriorityBase", 0, &vtProp, 0, 0);
+            wprintf(L"PriorityBase: % d\n", V_I4(&vtProp));
+            VariantClear(&vtProp);
+
+            hr = pclsObj->Get(L"UserModeTime", 0, &vtProp, 0, 0);
+            wprintf(L"UserModeTime: %I64d\n", V_I8(&vtProp));
+            VariantClear(&vtProp);
+
+            hr = pclsObj->Get(L"ThreadState", 0, &vtProp, 0, 0);
+            wprintf(L"ThreadState: %d\n", V_I4(&vtProp));
+            VariantClear(&vtProp);
+
+            pclsObj->Release();
+            count++;
+        }
+        cout << "\n" << count << " Threads" << endl;
+    }
+   
+  
+        hres = psvc->ExecQuery(
+            _bstr_t(L"WQL"),
+            _bstr_t(L"SELECT Name, ReadTransferCount FROM Win32_Process "),
+            WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+            NULL,
+            &pEnumerator
+        );
+        if (SUCCEEDED(hres)) {
+            ULONG uReturn = 0;
+            IWbemClassObject* pclsObj = NULL;
+            unsigned long long max = 0;
+            _bstr_t MaxName;
+            _bstr_t MaxReadTransferCount;
+            while (pEnumerator) {
+                HRESULT hr = pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn);
+                if (0 == uReturn)
+                {
+                    break;
+                }
+                VARIANT vtName, vtReadTransferCount;
+                hr = pclsObj->Get(SysAllocString(L"Name"), 0, &vtName, 0, 0);
+                hr = pclsObj->Get(SysAllocString(L"ReadTransferCount"), 0, &vtReadTransferCount, 0, 0);
+                if (SUCCEEDED(hr)) {
+                    unsigned long long readTransferCount = _wcstoui64(vtReadTransferCount.bstrVal, NULL, 10);
+                    if (readTransferCount > max) {
+                        max = readTransferCount;
+                        //MaxReadTransferCount = vtReadTransferCount.bstrVal;
+                        MaxName = vtName.bstrVal;
+                        //std::wcout << L"\nProcess Name: " << MaxName << std::endl;
+                        //std::wcout << L"\nReadTransferCount: " << SysAllocString(std::to_wstring(max).c_str()) << std::endl;
+
+                    }
+                }
+               
+
+
+                VariantClear(&vtName);
+                VariantClear(&vtReadTransferCount);
+                pclsObj->Release();
+            }
+            std::wcout << L"\nfinal Process Name: " << MaxName << std::endl;
+            std::wcout << L"\nReadTransferCount: " << SysAllocString(std::to_wstring(max).c_str()) << std::endl;
+           // std::wcout << L"\nReadTransferCount: " << MaxReadTransferCount << std::endl;
+
+        }
+       
+   
     psvc->Release();
     ploc->Release();
     pEnumerator->Release();
@@ -249,5 +401,24 @@ int main()
     CoUninitialize();
     return 0; // Програма завершена.
 
+
 }
 
+SYSTEMTIME WMIDateStringToDate(BSTR WMIdateString) {
+    SYSTEMTIME st = { 0 };
+    int year, month, day, hour, minute, second, microseconds, offset;
+    int result = swscanf_s(WMIdateString, L"%4d%2d%2d%2d%2d%2d.%6d%5d",
+        &year, &month, &day, &hour, &minute, &second, &microseconds, &offset);
+
+    if (result != 8) {
+        wprintf(L"Failed to parse WMI date string.\n");
+        return st;
+    }
+    st.wYear = static_cast<WORD>(year);
+    st.wMonth = static_cast<WORD>(month);
+    st.wDay = static_cast<WORD>(day);
+    st.wHour = static_cast<WORD>(hour);
+    st.wMinute = static_cast<WORD>(minute);
+    st.wSecond = static_cast<WORD>(second);
+    return st;
+}
