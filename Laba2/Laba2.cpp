@@ -148,7 +148,8 @@ int main()
 
 
     // Крок 7: -------------------------------------------------
-    // Отримати дані з запиту в кроці 6 -------------------
+
+    //Завдання 1
     while (pEnumerator)
     {
 
@@ -192,7 +193,7 @@ int main()
     }
 
     //IWbemClassObject* pClass = NULL;
-
+    //Завдання 2
     hres = psvc->GetObject(_bstr_t("Win32_Keyboard"), 0, NULL, &pclsObj, NULL);
 
     if (FAILED(hres))
@@ -243,6 +244,7 @@ int main()
 
     SafeArrayDestroy(psaNames);
 
+    //Завдання 3.а - 3.e
     STARTUPINFO si = { sizeof(STARTUPINFO) };
     PROCESS_INFORMATION pi;
 
@@ -297,6 +299,7 @@ int main()
             // Отримуємо інформацію про процес MS Access
         }
     }
+    //Завдання 3.f
     hres = psvc->ExecQuery(
         _bstr_t("WQL"),
         _bstr_t("SELECT * FROM Win32_Thread WHERE ProcessHandle = " + _bstr_t(std::to_wstring(processID).c_str())),
@@ -345,7 +348,8 @@ int main()
         }
         cout << "\n" << count << " Threads" << endl;
     }
-   
+        
+    // Завдання 4
   
         hres = psvc->ExecQuery(
             _bstr_t(L"WQL"),
