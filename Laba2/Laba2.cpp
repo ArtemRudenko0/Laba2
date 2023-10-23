@@ -124,6 +124,10 @@ int main()
     // Крок 6:
     // Використовувати Iwbemservices покажчик щоб зробити запити WMI --
     // наприклад на одержання імені операційної системи
+   
+
+
+    
     hres = psvc->ExecQuery(
         bstr_t("WQL"),
         bstr_t("SELECT * FROM Win32_Keyboard"),
@@ -142,10 +146,6 @@ int main()
         return 1; // Програма завершена.
     }
     else cout << "\nGot keyboard info" << endl;
-
-
-
-
 
     // Крок 7: -------------------------------------------------
 
@@ -191,9 +191,10 @@ int main()
 
         pclsObj->Release();
     }
-
+    system("pause");
     //IWbemClassObject* pClass = NULL;
     //Завдання 2
+    
     hres = psvc->GetObject(_bstr_t("Win32_Keyboard"), 0, NULL, &pclsObj, NULL);
 
     if (FAILED(hres))
@@ -243,8 +244,11 @@ int main()
     }
 
     SafeArrayDestroy(psaNames);
-
+   
+    system("pause");
+   
     //Завдання 3.а - 3.e
+    
     STARTUPINFO si = { sizeof(STARTUPINFO) };
     PROCESS_INFORMATION pi;
 
@@ -257,7 +261,7 @@ int main()
     );
     int processID = 0;
     if (SUCCEEDED(hres)) {
-
+        IWbemClassObject* pclsObj = NULL;
         si.dwFlags = STARTF_USESHOWWINDOW;
         si.wShowWindow = SW_SHOWMAXIMIZED;
         LPCTSTR appPath = L"C:\\Program Files\\Microsoft Office\\root\\Office16\\MSACCESS.EXE";  // Ваш шлях до MS Access
@@ -265,7 +269,7 @@ int main()
         WCHAR cmdLine[] = L"C:\\Users\\АРТЕМ\\Desktop\\Database1.accdb"; // Шлях до вашої бази даних
         LPCTSTR cmdDir = NULL; // Робочий каталог (можна вказати NULL для поточного каталогу)
         CreateProcess(appPath, cmdLine, NULL, NULL, FALSE, HIGH_PRIORITY_CLASS, NULL, cmdDir, &si, &pi);
-        Sleep(4000);
+        Sleep(2000);
         cout << endl;
         while (pEnumerator) {
             HRESULT hr = pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn);
@@ -348,9 +352,9 @@ int main()
         }
         cout << "\n" << count << " Threads" << endl;
     }
-        
+    system("pause");
     // Завдання 4
-  
+   
         hres = psvc->ExecQuery(
             _bstr_t(L"WQL"),
             _bstr_t(L"SELECT Name, ReadTransferCount FROM Win32_Process "),
@@ -391,13 +395,119 @@ int main()
                 VariantClear(&vtReadTransferCount);
                 pclsObj->Release();
             }
-            std::wcout << L"\nfinal Process Name: " << MaxName << std::endl;
+            std::wcout << L"\nProcess Name: " << MaxName << std::endl;
             std::wcout << L"\nReadTransferCount: " << SysAllocString(std::to_wstring(max).c_str()) << std::endl;
            // std::wcout << L"\nReadTransferCount: " << MaxReadTransferCount << std::endl;
 
         }
+    
+        system("pause");
+        
        
-   
+   //Завдання 5.а
+     hres = psvc->ExecQuery(
+        _bstr_t(L"WQL"),
+        _bstr_t(L"SELECT * FROM Win32_Process WHERE Name = 'notepad.exe' AND Priority = 4"),
+         WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+         NULL,
+         &pEnumerator
+        );
+     if (SUCCEEDED(hres)) {
+         ULONG uReturn = 0;
+         IWbemClassObject* pclsObj = NULL;
+         int count = 0;
+         
+         while (pEnumerator) {
+             HRESULT hr = pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn);
+             if (0 == uReturn) {
+                 break;
+             }
+
+             // Получение PID процесса
+             VARIANT vtProcessID;
+             hr = pclsObj->Get(L"ProcessID", 0, &vtProcessID, 0, 0);
+             if (SUCCEEDED(hr)) {
+                 int processID = vtProcessID.intVal;
+
+                 // Завершение процесса
+                 HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, processID);
+                 if (hProcess != NULL) {
+                     TerminateProcess(hProcess, 0);
+                     CloseHandle(hProcess);
+                     cout << "Closed process with id: " << processID << endl;
+                     count++;
+                 }
+             }
+
+             VariantClear(&vtProcessID);
+             pclsObj->Release();
+         }
+         cout << "Closed " << count << "x 'notepad.exe'" << endl;
+      
+     }
+     //Завдання 5.b
+     system("pause");
+     int totalCmdID = 0;
+     hres = psvc->ExecQuery(
+         _bstr_t("WQL"),
+         _bstr_t("SELECT * FROM Win32_Process WHERE Name = 'TOTALCMD64.EXE'"),
+         WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+         NULL,
+         &pEnumerator
+     );
+     if (SUCCEEDED(hres)) {
+         IWbemClassObject* pclsObj = NULL;
+         ULONG uReturn = 0;
+         HRESULT hr = pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn);
+         VARIANT vtProcessID;
+         hr = pclsObj->Get(L"ProcessID", 0, &vtProcessID, 0, 0);
+         if (SUCCEEDED(hr)) {
+             totalCmdID = vtProcessID.uintVal;
+         }
+         VariantClear(&vtProcessID);
+         pclsObj->Release();
+     }
+     cout << "ParentProcessId = " << totalCmdID << endl;
+     hres = psvc->ExecQuery(
+         _bstr_t(L"WQL"),
+         _bstr_t(L"SELECT * FROM Win32_Process WHERE ParentProcessId = " + _bstr_t(std::to_wstring(totalCmdID).c_str())),
+         WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+         NULL,
+         &pEnumerator
+     );
+     if (SUCCEEDED(hres)) {
+         ULONG uReturn = 0;
+         IWbemClassObject* pclsObj = NULL;
+         int count = 0;
+
+         while (pEnumerator) {
+             HRESULT hr = pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn);
+             if (0 == uReturn) {
+                 break;
+             }
+
+             // Получение PID процесса
+             VARIANT vtProcessID;
+             hr = pclsObj->Get(L"ProcessID", 0, &vtProcessID, 0, 0);
+             if (SUCCEEDED(hr)) {
+                 int processID = vtProcessID.intVal;
+
+                 // Завершение процесса
+                 HANDLE hProcess = OpenProcess(PROCESS_TERMINATE, FALSE, processID);
+                 if (hProcess != NULL) {
+                     TerminateProcess(hProcess, 0);
+                     CloseHandle(hProcess);
+                     cout << "Closed process with id: " << processID << endl;
+                     count++;
+                 }
+             }
+
+             VariantClear(&vtProcessID);
+             pclsObj->Release();
+         }
+         cout << "Closed " << count << "x processes launched by Total Commander" << endl;
+
+     }
     psvc->Release();
     ploc->Release();
     pEnumerator->Release();
